@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "fix-kr-gemini",
+  "version": "0.1.0",
+  "description": "Enter Enter",
+  "content_scripts": [
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}
