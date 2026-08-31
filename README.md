@@ -1,4 +1,8 @@
-## 설치 방법
+# Gemini KR IME fix
+
+Gemini 웹 버전에서 한글 입력 시 엔터를 두 번 눌러야 하는 현상을 해결합니다.
+
+# 설치 방법
 
 1. Chrome에서 `chrome://extensions`를 엽니다.
 2. 오른쪽 위의 `개발자 모드`를 켭니다.
