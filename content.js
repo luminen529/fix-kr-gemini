@@ -22,8 +22,12 @@
   }
 
   function isPlainEnter(event) {
+    // Windows IMEs may expose key="Process" while code still identifies Enter.
+    // 229 alone is not enough: it is also used for ordinary composition keys.
     return (
-      event.key === "Enter" &&
+      (event.key === "Enter" ||
+        event.code === "Enter" ||
+        event.code === "NumpadEnter") &&
       !event.shiftKey &&
       !event.ctrlKey &&
       !event.metaKey &&
@@ -79,6 +83,8 @@
   function clearPending(editor) {
     if (!editor || pendingEditor === editor) {
       pendingEditor = null;
+      clearTimeout(sendTimer);
+      sendTimer = null;
     }
   }
 
@@ -164,7 +170,7 @@
         return;
       }
 
-      if (event.key === "Escape") {
+      if (event.key === "Escape" || event.code === "Escape") {
         clearPending(editor);
         return;
       }
@@ -178,9 +184,12 @@
       // the final syllable. The send is deferred until compositionend.
       pendingEditor = editor;
 
+      // Keep the IME default action, but don't let Gemini also send this Enter.
+      event.stopImmediatePropagation();
+
       // Some browser/IME combinations dispatch compositionend before keydown.
-      // keyCode=229 is the fallback signal for that ordering.
-      if (!composingEditor && event.keyCode === 229) {
+      // isComposing/keyCode=229 can still identify that IME keydown.
+      if (composingEditor !== editor) {
         scheduleSend(editor);
       }
     },
