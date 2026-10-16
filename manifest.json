@@ -1,13 +1,38 @@
 {
   "manifest_version": 3,
   "name": "fix-kr-gemini",
-  "version": "0.1.1",
-  "description": "Enter Enter",
+  "version": "0.2.0",
+  "description": "Gemini 한글 입력 시 엔터 두 번 문제와 깨진 굵은 글씨(**)를 자동으로 고칩니다.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "permissions": ["scripting"],
+  "host_permissions": [
+    "https://gemini.google.com/*",
+    "https://notebook.google.com/*",
+    "https://notebooklm.google.com/*"
+  ],
   "content_scripts": [
     {
       "matches": ["https://gemini.google.com/*"],
-      "js": ["content.js"],
+      "js": ["ime-fix.js"],
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://gemini.google.com/*",
+        "https://notebook.google.com/*",
+        "https://notebooklm.google.com/*"
+      ],
+      "js": ["bold-fix.js"],
+      "run_at": "document_idle"
     }
   ]
 }
