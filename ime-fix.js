@@ -10,6 +10,8 @@
     ".send-button.submit > button"
   ];
   const INSTANCE_EVENT = "fix-kr-gemini:ime-fix";
+  // Hangul Jamo, Compatibility Jamo, Jamo Extended-A/B and Syllables.
+  const HANGUL = /[ᄀ-ᇿ㄰-㆏ꥠ-꥿가-퟿]/;
 
   // background.js injects this script into tabs that were already open when
   // the extension was installed or updated. Retire any previous instance so
@@ -26,6 +28,7 @@
   let composingEditor = null;
   let pendingEditor = null;
   let sendTimer = null;
+  let committedText = "";
   let lastClickedText = "";
   let lastClickedAt = 0;
 
@@ -109,7 +112,13 @@
       return;
     }
 
-    if (!editor.isConnected || !getEditorText(editor)) {
+    // Only a Hangul commit means "send". Enter that picks a Hanja candidate or
+    // confirms a Japanese/Chinese conversion must only finish the conversion.
+    if (
+      !editor.isConnected ||
+      !getEditorText(editor) ||
+      !HANGUL.test(committedText)
+    ) {
       clearPending(editor);
       return;
     }
@@ -166,6 +175,7 @@
       const editor = getEditor(event.target);
       if (editor) {
         composingEditor = editor;
+        committedText = "";
       }
     },
     listenerOptions
@@ -182,6 +192,7 @@
       if (composingEditor === editor) {
         composingEditor = null;
       }
+      committedText = event.data || "";
 
       // Empty composition data means that the IME composition was cancelled.
       if (pendingEditor === editor && event.data === "") {

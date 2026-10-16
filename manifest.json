@@ -2,9 +2,16 @@
   "manifest_version": 3,
   "name": "fix-kr-gemini",
   "version": "0.2.0",
-  "description": "Gemini에서 한글 입력 시 엔터를 두 번 눌러야 하는 문제와 깨진 **굵게** 표시를 고칩니다.",
+  "description": "Gemini 한글 입력 시 엔터 두 번 문제와 깨진 굵은 글씨(**)를 자동으로 고칩니다.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
   },
   "permissions": ["scripting"],
   "host_permissions": [
