@@ -4,12 +4,31 @@
   const EDITOR_SELECTOR = '.ql-editor[contenteditable="true"]';
   const SEND_BUTTON_SELECTORS = [
     'button[aria-label="메시지 보내기"]',
-    'button[aria-label="Send message"]'
+    'button[aria-label="Send message"]',
+    // Language-independent fallback; the container switches to ".stop" while
+    // a response is being generated.
+    ".send-button.submit > button"
   ];
+  const INSTANCE_EVENT = "fix-kr-gemini:ime-fix";
+  // Hangul Jamo, Compatibility Jamo, Jamo Extended-A/B and Syllables.
+  const HANGUL = /[ᄀ-ᇿ㄰-㆏ꥠ-꥿가-퟿]/;
+
+  // background.js injects this script into tabs that were already open when
+  // the extension was installed or updated. Retire any previous instance so
+  // only one handles Enter.
+  document.dispatchEvent(new Event(INSTANCE_EVENT));
+
+  const lifetime = new AbortController();
+  const listenerOptions = { capture: true, signal: lifetime.signal };
+  document.addEventListener(INSTANCE_EVENT, stop, {
+    once: true,
+    signal: lifetime.signal
+  });
 
   let composingEditor = null;
   let pendingEditor = null;
   let sendTimer = null;
+  let committedText = "";
   let lastClickedText = "";
   let lastClickedAt = 0;
 
@@ -93,7 +112,13 @@
       return;
     }
 
-    if (!editor.isConnected || !getEditorText(editor)) {
+    // Only a Hangul commit means "send". Enter that picks a Hanja candidate or
+    // confirms a Japanese/Chinese conversion must only finish the conversion.
+    if (
+      !editor.isConnected ||
+      !getEditorText(editor) ||
+      !HANGUL.test(committedText)
+    ) {
       clearPending(editor);
       return;
     }
@@ -128,15 +153,32 @@
     }, 0);
   }
 
+  function stop() {
+    clearPending(null);
+    lifetime.abort();
+  }
+
+  // A content script left behind by a disabled or removed extension loses its
+  // runtime id; step aside so Gemini's own Enter handling comes back.
+  function isOrphaned() {
+    if (globalThis.chrome?.runtime?.id) {
+      return false;
+    }
+
+    stop();
+    return true;
+  }
+
   window.addEventListener(
     "compositionstart",
     function (event) {
       const editor = getEditor(event.target);
       if (editor) {
         composingEditor = editor;
+        committedText = "";
       }
     },
-    true
+    listenerOptions
   );
 
   window.addEventListener(
@@ -150,6 +192,7 @@
       if (composingEditor === editor) {
         composingEditor = null;
       }
+      committedText = event.data || "";
 
       // Empty composition data means that the IME composition was cancelled.
       if (pendingEditor === editor && event.data === "") {
@@ -159,14 +202,14 @@
 
       scheduleSend(editor);
     },
-    true
+    listenerOptions
   );
 
   window.addEventListener(
     "keydown",
     function (event) {
       const editor = getEditor(event.target);
-      if (!editor) {
+      if (!editor || isOrphaned()) {
         return;
       }
 
@@ -193,7 +236,7 @@
         scheduleSend(editor);
       }
     },
-    true
+    listenerOptions
   );
 
   window.addEventListener(
@@ -210,6 +253,6 @@
         scheduleSend(editor);
       }
     },
-    true
+    listenerOptions
   );
 })();
