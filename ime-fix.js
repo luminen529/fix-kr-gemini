@@ -1,14 +1,42 @@
 (function () {
   "use strict";
 
-  const EDITOR_SELECTOR = '.ql-editor[contenteditable="true"]';
-  const SEND_BUTTON_SELECTORS = [
-    'button[aria-label="메시지 보내기"]',
-    'button[aria-label="Send message"]',
-    // Language-independent fallback; the container switches to ".stop" while
-    // a response is being generated.
-    ".send-button.submit > button"
-  ];
+  const SITES = {
+    "gemini.google.com": {
+      editor: '.ql-editor[contenteditable="true"]',
+      sendButtons: [
+        'button[aria-label="메시지 보내기"]',
+        'button[aria-label="Send message"]',
+        // Language-independent fallback; the container switches to ".stop"
+        // while a response is being generated.
+        ".send-button.submit > button"
+      ],
+      enterSends: () => true
+    },
+    "aistudio.google.com": {
+      // Only the prompt box; textareas that edit earlier turns keep their own
+      // Enter handling.
+      editor: [
+        "ms-prompt-box textarea",
+        "ms-prompt-input-wrapper textarea",
+        "ms-chunk-input textarea"
+      ].join(","),
+      // While a response is generated the button turns into Stop with
+      // type="button", so type="submit" never matches the stop button.
+      sendButtons: [
+        'ms-run-button button[type="submit"]',
+        'button[aria-label="Run"][type="submit"]'
+      ],
+      enterSends: aiStudioEnterSends
+    }
+  };
+  const SITE = SITES[location.hostname];
+  if (!SITE) {
+    return;
+  }
+
+  const EDITOR_SELECTOR = SITE.editor;
+  const SEND_BUTTON_SELECTORS = SITE.sendButtons;
   const INSTANCE_EVENT = "fix-kr-gemini:ime-fix";
   // Hangul Jamo, Compatibility Jamo, Jamo Extended-A/B and Syllables.
   const HANGUL = /[ᄀ-ᇿ㄰-㆏ꥠ-꥿가-퟿]/;
@@ -31,6 +59,17 @@
   let committedText = "";
   let lastClickedText = "";
   let lastClickedAt = 0;
+
+  // AI Studio can be set to send with Ctrl+Enter, where plain Enter is a
+  // newline. The choice is stored in the page's localStorage.
+  function aiStudioEnterSends() {
+    try {
+      const pref = JSON.parse(localStorage.getItem("aiStudioUserPreference"));
+      return pref?.enterKeyBehavior !== 2;
+    } catch {
+      return true;
+    }
+  }
 
   function getEditor(target) {
     if (!(target instanceof Element)) {
@@ -63,7 +102,10 @@
   }
 
   function getEditorText(editor) {
-    return (editor.textContent || "")
+    const text =
+      editor instanceof HTMLTextAreaElement ? editor.value : editor.textContent;
+
+    return (text || "")
       .replace(/\u200B/g, "")
       .replace(/\u00A0/g, " ")
       .trim();
@@ -159,7 +201,7 @@
   }
 
   // A content script left behind by a disabled or removed extension loses its
-  // runtime id; step aside so Gemini's own Enter handling comes back.
+  // runtime id; step aside so the site's own Enter handling comes back.
   function isOrphaned() {
     if (globalThis.chrome?.runtime?.id) {
       return false;
@@ -218,8 +260,15 @@
         return;
       }
 
-      // Shift+Enter and all non-IME Enter events keep Gemini's native behavior.
-      if (event.repeat || !isPlainEnter(event) || !isImeEnter(event, editor)) {
+      if (event.repeat || !isPlainEnter(event) || !SITE.enterSends()) {
+        return;
+      }
+
+      // Shift+Enter and all non-IME Enter events keep the site's native
+      // behavior. A native Enter that arrives while a send is still pending
+      // sends on its own, so drop ours to avoid sending twice.
+      if (!isImeEnter(event, editor)) {
+        clearPending(editor);
         return;
       }
 
@@ -227,7 +276,7 @@
       // the final syllable. The send is deferred until compositionend.
       pendingEditor = editor;
 
-      // Keep the IME default action, but don't let Gemini also send this Enter.
+      // Keep the IME default action, but don't let the site also send this Enter.
       event.stopImmediatePropagation();
 
       // Some browser/IME combinations dispatch compositionend before keydown.

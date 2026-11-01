@@ -1,4 +1,4 @@
-// Gemini Bold Fixer
+// Gemini Bold Fixer (Gemini, Gemini Notebook, AI Studio)
 // 답변이 다 그려진 뒤(스트리밍이 끝나고 일정 시간 DOM 변화가 없을 때) 텍스트에 그대로 드러난 **굵게** / *기울임* 마커만 찾아 정리한다.
 // 정상 렌더링된 볼드는 이미 <b>/<strong>이라 텍스트에 별표가 없으므로 건드리지 않는다.
 (() => {
@@ -10,10 +10,18 @@
   const QUIET_MS = 800;
   // 스트리밍 중인 답변 (Gemini는 생성이 끝날 때까지 .markdown에 aria-busy="true"를 단다)
   const BUSY = '[aria-busy="true"]';
+  // 페이지 어딘가에서 생성 중임을 알리는 표시. AI Studio는 답변에 aria-busy가 없고,
+  // 생성 중에는 실행 버튼이 type="button"인 중지 버튼으로 바뀐다.
+  const PAGE_BUSY = 'ms-run-button button[type="button"]';
+  // PAGE_BUSY는 답변과 직접 연결된 표시가 아니므로, 사이트 구조가 바뀌어 계속 남더라도
+  // 이 시간(ms)이 지나면 더 미루지 않는다
+  const PAGE_BUSY_MAX_MS = 120000;
+  // 답변 컨테이너를 못 찾았을 때 <main>을 훑을지. AI Studio는 구조가 분명하므로 하지 않는다.
+  const FALLBACK_MAIN = location.hostname !== 'aistudio.google.com';
   // 설치·업데이트 직후 background.js가 열린 탭에 다시 주입하면 이전 인스턴스를 정리한다
   const INSTANCE_EVENT = 'fix-kr-gemini:bold-fix';
 
-  // 모델 답변 컨테이너 (Gemini, Gemini Notebook). 못 찾으면 <main>으로 대체.
+  // 모델 답변 컨테이너 (Gemini, Gemini Notebook, AI Studio). 못 찾으면 <main>으로 대체.
   const RESPONSE = [
     'message-content',
     '.model-response-text',
@@ -21,6 +29,7 @@
     '.to-user-container',
     '.message-text-content',
     '.summary-content',
+    '.chat-turn-container.model',
   ].join(',');
   // 아예 건드리지 않는 영역: 입력창, 사용자 질문, 코드 블록 등
   const SKIP = [
@@ -28,9 +37,10 @@
     '[contenteditable=""]', '[contenteditable="true"]',
     'user-query', '.user-query-container', '.query-text', '.from-user-container',
     '.from-user-message-card-content',
+    '.chat-turn-container.user', '.user-prompt-container', 'ms-code-block',
   ].join(',');
   // 문단 내부지만 별표를 검사하지 않는 인라인 요소: 인라인 코드, 수식
-  const ATOM = 'code, kbd, samp, math, .katex, .math-inline, mjx-container';
+  const ATOM = 'code, kbd, samp, math, .katex, .math-inline, mjx-container, .inline-code, ms-katex';
 
   const OBJ = '￼'; // ATOM 자리 표시용 문자
   // ***x***, **x**, *x*: 여는 마커 앞은 영숫자·별표·역슬래시가 아니고, 마커 안쪽은 공백이 아님
@@ -115,7 +125,16 @@
 
   // 답변(root)별로 마지막 변경 시각을 기록하고, QUIET_MS 동안 조용해진 것만 처리
   const pending = new Map();
+  // root별로 PAGE_BUSY 때문에 처음 미룬 시각
+  const busySince = new Map();
   let timer = 0;
+
+  function isBusy(root, now) {
+    if (root.matches(BUSY) || root.querySelector(BUSY)) return true;
+    if (!document.querySelector(PAGE_BUSY)) return false;
+    if (!busySince.has(root)) busySince.set(root, now);
+    return now - busySince.get(root) < PAGE_BUSY_MAX_MS;
+  }
 
   function rootOf(node) {
     const el = node.nodeType === 1 ? node : node.parentElement;
@@ -125,7 +144,7 @@
     for (let e = el.closest(RESPONSE); e; e = e.parentElement && e.parentElement.closest(RESPONSE)) root = e;
     if (root) return root;
     // 답변 컨테이너를 아는 페이지에서는 그 밖(입력창 주변 UI 등)의 변화로 <main> 전체를 훑지 않는다
-    return document.querySelector(RESPONSE) ? null : el.closest('main');
+    return FALLBACK_MAIN && !document.querySelector(RESPONSE) ? el.closest('main') : null;
   }
 
   function tick() {
@@ -135,12 +154,13 @@
     for (const [root, t] of pending) {
       let left = t + QUIET_MS - now;
       // 생성 중에 잠깐 멈춘 경우: 렌더러가 아직 노드를 고치는 중이므로 끝날 때까지 미룬다
-      if (left <= 0 && root.isConnected && (root.matches(BUSY) || root.querySelector(BUSY))) {
+      if (left <= 0 && root.isConnected && isBusy(root, now)) {
         pending.set(root, now);
         left = QUIET_MS;
       }
       if (left > 0) { wait = Math.min(wait, left); continue; }
       pending.delete(root);
+      busySince.delete(root);
       fixRoot(root);
     }
     observer.takeRecords(); // 우리가 만든 변경은 다시 감지하지 않음
@@ -175,6 +195,7 @@
     clearTimeout(timer);
     timer = 0;
     pending.clear();
+    busySince.clear();
   }
 
   document.dispatchEvent(new Event(INSTANCE_EVENT));
