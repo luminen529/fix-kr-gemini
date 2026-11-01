@@ -1,9 +1,9 @@
 # Gemini KR IME fix
 
-Gemini 웹 버전에서 한글을 쓸 때 생기는 불편을 고칩니다.
+Gemini 웹 버전과 Google AI Studio에서 한글을 쓸 때 생기는 불편을 고칩니다.
 
-- **엔터 두 번**: 한글 입력 중 엔터를 두 번 눌러야 전송되는 현상을 해결합니다.
-- **Bold 미적용**: 정상적으로 렌더링 되지 않은 Bold를 적용합니다. Gemini Web과 Notebook에서 적용됩니다. ex) `**텍스트**`
+- **엔터 두 번**: 한글 입력 중 엔터를 두 번 눌러야 전송되는 현상을 해결합니다. Gemini Web과 AI Studio에서 적용됩니다. AI Studio에서 Ctrl+Enter로 전송하도록 설정했다면 엔터는 그대로 줄바꿈입니다.
+- **Bold 미적용**: 정상적으로 렌더링 되지 않은 Bold를 적용합니다. Gemini Web, Notebook, AI Studio에서 적용됩니다. ex) `**텍스트**`
 
 # 설치 방법
 
